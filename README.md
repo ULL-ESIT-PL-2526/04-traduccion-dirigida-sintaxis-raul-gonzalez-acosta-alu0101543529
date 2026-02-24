@@ -169,3 +169,59 @@ Este comando:
 3. Genera `src/parser.js`, un módulo CommonJS que exporta el objeto `parser` con el método `parser.parse(input)`.
 
 > **Nota:** Si el fichero `grammar.jison` contiene errores de sintaxis, Jison los reportará aquí. Si los hay en la gramática, Jison también los avisa aunque intenta resolverlos con heurísticas.
+
+### Paso 3: Ejecutar las pruebas
+
+```bash
+npm test
+```
+
+Esto ejecuta el script `"test"` definido en `package.json`, que primero reconstruye el parser y luego lanza Jest. Jest descubre automáticamente todos los ficheros en `__tests__/` con extensión `.test.js`.
+
+Resultado esperado:
+
+```
+ PASS  __tests__/parser.test.js
+  Parser Tests
+    Basic number parsing
+      ✓ should parse single numbers (4 ms)
+    Basic arithmetic operations
+      ✓ should handle addition (1 ms)
+      ✓ should handle subtraction (1 ms)
+      ✓ should handle multiplication (1 ms)
+      ✓ should handle division (1 ms)
+      ✓ should handle exponentiation (1 ms)
+    Operator precedence and associativity
+      ✓ should handle left associativity for same precedence operations (1 ms)
+    Complex expressions
+      ✓ should handle multiple operations of same precedence
+    Edge cases
+      ✓ should handle expressions with extra whitespace
+      ✓ should handle zero in operations (1 ms)
+      ✓ should handle division by zero (1 ms)
+      ✓ should handle negative results
+      ✓ should handle decimal results (1 ms)
+      ✓ should handle large numbers
+    Input validation and error cases
+      ✓ should handle invalid input gracefully (23 ms)
+      ✓ should handle incomplete expressions (7 ms)
+    Regression tests
+      ✓ should match examples from index.js
+      
+Test Suites: 1 passed, 1 total
+Tests:       17 passed, 17 total
+Snapshots:   0 total
+Time:        0.289 s, estimated 1 s
+```
+
+### Paso 4: Usar la calculadora desde la línea de comandos
+
+```bash
+# Evaluar una expresión simple
+./src/index.js 3+4*2
+# => 14
+
+# Con potencia
+./src/index.js 2**10
+# => 1024
+```
