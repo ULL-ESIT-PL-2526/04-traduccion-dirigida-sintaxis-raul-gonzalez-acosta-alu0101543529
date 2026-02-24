@@ -1,7 +1,7 @@
 {
-  "name": "04-traduccion",
+  "name": "04-traduccion-dirigida-por-la-sintaxis",
   "version": "1.0.0",
-  "description": "Traducción dirigita por la sintaxis",
+  "description": "Traducción dirigida por la sintaxis",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -20,17 +20,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ULL-ESIT-PL-2526/04-tds-template.git"
+    "url": "git+https://github.com/ULL-ESIT-PL-2526/04-traduccion-dirigida-sintaxis-raul-gonzalez-acosta-alu0101543529.git"
   },
   "keywords": ["jison", "parser", "syntax directed translation"],
-  "author": "Casiano Rodriguez-Leon",
-  "contributors": ["Coromoto Leon"],
+  "author": "Raúl González Acosta",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://https://github.com/ULL-ESIT-PL-2526/04-tds-template.git/issues"
+    "url": "https://github.com/ULL-ESIT-PL-2526/04-traduccion-dirigida-sintaxis-raul-gonzalez-acosta-alu0101543529/issues"
   },
-  "homepage": "https://github.com/ULL-ESIT-PL-2526/04-tds-template.git#readme",
+  "homepage": "https://github.com/ULL-ESIT-PL-2526/04-traduccion-dirigida-sintaxis-raul-gonzalez-acosta-alu0101543529.git#readme",
   "dependencies": {
     "jison": "^0.4.18"
   },
