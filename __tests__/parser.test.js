@@ -110,7 +110,6 @@ describe('Parser Tests', () => {
       expect(() => parse("3 +")).toThrow();
       expect(() => parse("+ 3")).toThrow();
       expect(() => parse("3 + + 4")).toThrow();
-      expect(() => parse("3.5")).toThrow(); // Only integers are supported
     });
 
     test('should handle incomplete expressions', () => {
@@ -128,4 +127,47 @@ describe('Parser Tests', () => {
     });
   });
 
+  describe('Float numbers', () => {
+    test('should parse floating point numbers', () => {
+      expect(parse("2.35")).toBe(2.35);
+      expect(parse("23")).toBe(23);
+      expect(parse("0.5")).toBe(0.5);
+      expect(parse("3.14")).toBe(3.14);
+    });
+
+    test('should parse scientific notation', () => {
+      expect(parse("2.35e-3")).toBeCloseTo(0.00235);
+      expect(parse("2.35e+3")).toBe(2350);
+      expect(parse("2.35E-3")).toBeCloseTo(0.00235);
+      expect(parse("1e2")).toBe(100);
+      expect(parse("1.5e-2")).toBe(0.015);
+    });
+
+    test('should handle arithmetic with floating point numbers', () => {
+      expect(parse("2.5 + 3.5")).toBe(6);
+      expect(parse("5.5 - 2.25")).toBeCloseTo(3.25);
+      expect(parse("2.5 * 4")).toBe(10);
+      expect(parse("7.5 / 2.5")).toBe(3);
+    });
+  });
+
+  describe('Single-line comments', () => {
+    test('should ignore single-line comments', () => {
+      expect(parse("42 // this is a comment")).toBe(42);
+      expect(parse("3 + 5 // addition result")).toBe(8);
+      expect(parse("10 - 3 // subtraction")).toBe(7);
+    });
+
+    test('should handle comments after operations', () => {
+      expect(parse("2 * 3 // multiplication")).toBe(6);
+      expect(parse("20 / 4 // division")).toBe(5);
+      expect(parse("2 ** 3 // exponentiation")).toBe(8);
+    });
+
+    test('should handle comments with complex expressions', () => {
+      expect(parse("1 + 2 + 3 // sum")).toBe(6);
+      expect(parse("10 - 4 - 3 // nested subtraction")).toBe(3);
+      expect(parse("2.5 * 4 // float multiplication")).toBe(10);
+    });
+  });
 });
