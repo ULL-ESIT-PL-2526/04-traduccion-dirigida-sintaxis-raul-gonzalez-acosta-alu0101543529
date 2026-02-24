@@ -225,3 +225,105 @@ Time:        0.289 s, estimated 1 s
 ./src/index.js 2**10
 # => 1024
 ```
+
+---
+
+## 4. Respuestas a las preguntas del enunciado
+
+El enunciado presenta el siguiente bloque léxico del fichero `grammar.jison` original y plantea varias preguntas:
+
+```jison
+%lex
+%%
+\s+          { /* skip whitespace */; }
+[0-9]+       { return 'NUMBER'; }
+"**"         { return 'OP'; }
+[-+*/]       { return 'OP'; }
+<<EOF>>      { return 'EOF'; }
+.            { return 'INVALID'; }
+/lex
+```
+
+### Pregunta 3.1 — Diferencia entre `/* skip whitespace */` y devolver un token
+
+Cuando el lexer encuentra una secuencia de caracteres que coincide con una regla, puede hacer dos cosas:
+
+**a) No devolver nada (skip):**
+```jison
+\s+  { /* skip whitespace */; }
+```
+El lexer consume los caracteres de la entrada pero **no produce ningún token**. El parser nunca llega a ver esos caracteres; es como si no existieran. Esta técnica se usa para ignorar separadores que no tienen valor semántico: espacios, tabuladores, saltos de línea, y en nuestra modificación, comentarios.
+
+**b) Devolver un token:**
+```jison
+[0-9]+  { return 'NUMBER'; }
+```
+El lexer consume los caracteres y **envía un token al parser**. El parser recibirá ese token en su siguiente llamada y lo procesará según las reglas gramaticales.
+
+**Diferencia clave:** El *skip* descarta la información; el *return* la preserva y la hace visible para el análisis sintáctico.
+
+---
+
+### Pregunta 3.2 — Secuencia exacta de tokens para `123**45+@`
+
+El lexer procesa la entrada de izquierda a derecha, aplicando la regla que coincida con el prefijo más largo (*longest match*):
+
+| Posición | Caracteres | Regla aplicada | Token producido |
+| -------- | ---------- | -------------- | --------------- |
+| 0        | `123`      | `[0-9]+`       | `NUMBER("123")` |
+| 3        | `**`       | `"**"`         | `OP("**")`      |
+| 5        | `45`       | `[0-9]+`       | `NUMBER("45")`  |
+| 7        | `+`        | `[-+*/]`       | `OP("+")`       |
+| 8        | `@`        | `.`            | `INVALID("@")`  |
+| 9        | (fin)      | `<<EOF>>`      | `EOF`           |
+
+**Secuencia de tokens:**
+```
+NUMBER("123"), OP("**"), NUMBER("45"), OP("+"), INVALID("@"), EOF
+```
+
+---
+
+### Pregunta 3.3 — Por qué `**` debe aparecer antes que `[-+*/]`
+
+Los lexers aplican las reglas en **orden de declaración** cuando hay ambigüedad. Si la regla `[-+*/]` apareciera primero, al encontrar `**` el lexer haría lo siguiente:
+
+1. Compara `*` con `[-+*/]` → coincide → devuelve `OP("*")`.
+2. Compara el segundo `*` con `[-+*/]` → coincide → devuelve `OP("*")`.
+
+El resultado sería **dos tokens `OP("*")`** en lugar de un único `OP("**")`. El parser esperaría una expresión entre ambos asteriscos y fallaría.
+
+Al colocar `"**"` antes, el lexer tiene preferencia por la coincidencia más larga: al ver `**` usa esa regla y produce **un solo token** `OP("**")`.
+
+Este principio se llama **regla del prefijo más largo** combinada con **prioridad por orden**: ante dos reglas que coinciden con el mismo prefijo, gana la que aparece primero en el fichero.
+
+---
+
+### Pregunta 3.4 — Cuándo se devuelve EOF
+
+La regla especial `<<EOF>>` se activa cuando el lexer ha consumido **todos los caracteres de la entrada** y no quedan más por leer. Es el equivalente al fin de fichero en un flujo de entrada.
+
+El token `EOF` sirve para indicarle al parser que la entrada ha terminado. Esto permite que la producción:
+```
+L → E EOF
+```
+verifique que la expresión se ha reconocido completamente, sin caracteres sobrantes al final.
+
+> **Nota de implementación:** Si no existiera esta regla, el parser no sabría distinguir entre "la expresión es válida y ha terminado" y "hay caracteres pendientes por procesar".
+
+---
+
+### Pregunta 3.5 — Por qué existe la regla `.` que devuelve INVALID
+
+El punto `.` en expresiones regulares coincide con **cualquier carácter** que no haya sido capturado por las reglas anteriores. Esta regla actúa como un **comodín de último recurso**.
+
+Sin ella, si el usuario escribe un carácter no reconocido (como `@`, `#`, `$`, o letras), el lexer generaría un error no controlado y el programa se detendría abruptamente.
+
+Con la regla `.` → `INVALID`:
+- El lexer **no falla silenciosamente**: siempre produce un token.
+- El parser recibe `INVALID` y puede generar un **mensaje de error descriptivo** indicando qué carácter es inválido y en qué posición.
+- El proceso de recuperación de errores puede continuar si se desea.
+
+En resumen, es una regla de robustez que garantiza que ningún carácter de entrada quede sin procesar.
+
+---
