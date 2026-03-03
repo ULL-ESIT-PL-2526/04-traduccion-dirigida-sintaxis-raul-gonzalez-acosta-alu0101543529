@@ -1,4 +1,4 @@
-# Procesadores de Lenguajes — Práctica de Laboratorio #4
+# Procesadores de Lenguajes
 ### Calculadora con SDD usando Jison
 
 > **Asignatura:** Procesadores de Lenguajes · Grado en Ingeniería Informática  
@@ -10,6 +10,7 @@
 
 ## Tabla de contenidos
 
+### Practica 4: Traducción Dirigida por la Sintaxis (SDD): Léxico con Jison
 1. [Conceptos teóricos previos](#1-conceptos-teóricos-previos)
 2. [Estructura del proyecto](#2-estructura-del-proyecto)
 3. [Instalación y ejecución paso a paso](#3-instalación-y-ejecución-paso-a-paso)
@@ -17,6 +18,16 @@
 5. [Modificaciones al analizador léxico](#5-modificaciones-al-analizador-léxico)
 6. [Pruebas Jest](#6-pruebas-jest)
 7. [Referencia de la gramática y la SDD](#7-referencia-de-la-gramática-y-la-sdd)
+
+### Practica 5: Traducción Dirigida por la SIntaxis (SDD): Gramática con Jison
+1. [Derivaciones para las frases de ejemplo](#1-derivaciones-para-las-frases-de-ejemplo)
+2. [Árboles de análisis sintáctico (parse trees)](#2-árboles-de-análisis-sintáctico-parse-trees)
+3. [Orden de evaluación de las acciones semánticas](#3-orden-de-evaluación-de-las-acciones-semánticas)
+4. [Por qué los resultados no coinciden con los convenios matemáticos](#4-por-qué-los-resultados-no-coinciden-con-los-convenios-matemáticos)
+5. [Modificación de la gramática: precedencia y asociatividad](#5-modificación-de-la-gramática-precedencia-y-asociatividad)
+6. [Soporte de paréntesis](#6-soporte-de-paréntesis)
+7. [Estructura del proyecto](#7-estructura-del-proyecto)
+8. [Ejecución de tests](#8-ejecución-de-tests)
 
 ---
 
@@ -590,3 +601,233 @@ npm test
 La implementación manual usa las mismas técnicas que Jison internamente:
 - Un **lexer** basado en expresiones regulares JavaScript.
 - Un **parser descendente recursivo** que implementa la asociatividad izquierda mediante un bucle `while`.
+---
+---
+---
+# 1. Derivaciones para las frases de ejemplo
+
+Se usa la gramática **original** (sin precedencia):
+
+```
+L → E eof
+E → E op T  |  T
+T → number
+```
+
+### 1.1 Frase: `4.0 - 2.0 * 3.0`
+
+```
+L ⇒ E eof
+  ⇒ E op T eof
+  ⇒ E op number eof                          [T → number, number = 3.0]
+  ⇒ E op 3.0 eof
+  ⇒ E op T op 3.0 eof
+  ⇒ E op number op 3.0 eof                   [T → number, number = 2.0]
+  ⇒ E op 2.0 op 3.0 eof
+  ⇒ T op 2.0 op 3.0 eof                      [E → T]
+  ⇒ number op 2.0 op 3.0 eof                 [T → number, number = 4.0]
+  ⇒ 4.0 - 2.0 * 3.0 eof
+```
+
+> La gramática original no distingue entre `-` y `*`, ambos son el mismo token `op`.  
+> La frase se parsea como **(4.0 - 2.0) * 3.0 = 6.0** en lugar del correcto **4.0 - (2.0 * 3.0) = -2.0**.
+
+---
+
+### 1.2 Frase: `2 ** 3 ** 2`
+
+```
+L ⇒ E eof
+  ⇒ E op T eof
+  ⇒ E op number eof                          [T → number, number = 2]
+  ⇒ E op 2 eof
+  ⇒ E op T op 2 eof
+  ⇒ E op number op 2 eof                     [T → number, number = 3]
+  ⇒ E op 3 op 2 eof
+  ⇒ T op 3 op 2 eof                          [E → T]
+  ⇒ number op 3 op 2 eof                     [T → number, number = 2]
+  ⇒ 2 ** 3 ** 2 eof
+```
+
+> La gramática original evalúa de izquierda a derecha: **(2 ** 3) ** 2 = 64**  
+> El resultado matemático correcto (asociatividad derecha) sería **2 ** (3 ** 2) = 512**.
+
+---
+
+### 1.3 Frase: `7 - 4 / 2`
+
+```
+L ⇒ E eof
+  ⇒ E op T eof
+  ⇒ E op number eof                          [T → number, number = 2]
+  ⇒ E op 2 eof
+  ⇒ E op T op 2 eof
+  ⇒ E op number op 2 eof                     [T → number, number = 4]
+  ⇒ E op 4 op 2 eof
+  ⇒ T op 4 op 2 eof                          [E → T]
+  ⇒ number op 4 op 2 eof                     [T → number, number = 7]
+  ⇒ 7 - 4 / 2 eof
+```
+
+> La gramática original evalúa: **(7 - 4) / 2 = 1.5** en lugar del correcto **7 - (4 / 2) = 5**.
+
+---
+
+## 2. Árboles de análisis sintáctico (parse trees)
+
+### 2.1 Árbol para `4.0 - 2.0 * 3.0` (gramática original)
+
+```
+              L
+              │
+         ─────┴─────
+         E          eof
+    ─────┼─────
+    E   op    T
+    │    │    │
+    T   (*)  num
+    │        │
+   num      3.0
+    │
+   E   op   T
+   │    │   │
+   T   (-) num
+   │       │
+  num     2.0
+   │
+  4.0
+```
+
+La recursión izquierda de `E → E op T` hace que el árbol crezca hacia la izquierda. El nodo raíz de `E` aplica primero el operador más a la derecha en la cadena, que en este caso es `*`, con operandos `(4.0 - 2.0)` y `3.0`.
+
+**Evaluación resultante:** `operate('*', operate('-', 4.0, 2.0), 3.0)` = `operate('*', 2.0, 3.0)` = **6.0**
+
+---
+
+### 2.2 Árbol para `2 ** 3 ** 2` (gramática original)
+
+```
+              L
+              │
+         ─────┴─────
+         E          eof
+    ─────┼──────
+    E   op     T
+    │   (**)   │
+    │          num
+    │           │
+    │          2
+  ──┼──────
+  E   op     T
+  │   (**)   │
+  │          num
+  │           │
+  T          3
+  │
+ num
+  │
+  2
+```
+
+**Evaluación resultante:** `operate('**', operate('**', 2, 3), 2)` = `operate('**', 8, 2)` = **64**
+
+El resultado matemáticamente correcto (asociatividad derecha) sería:  
+`operate('**', 2, operate('**', 3, 2))` = `operate('**', 2, 9)` = **512**
+
+---
+
+### 2.3 Árbol para `7 - 4 / 2` (gramática original)
+
+```
+              L
+              │
+         ─────┴─────
+         E          eof
+    ─────┼─────
+    E   op    T
+    │   (/)   │
+    │        num
+    │         │
+    │         2
+  ──┼──
+  E   op   T
+  │   (-)  │
+  T       num
+  │        │
+ num       4
+  │
+  7
+```
+
+**Evaluación resultante:** `operate('/', operate('-', 7, 4), 2)` = `operate('/', 3, 2)` = **1.5**
+
+El resultado matemáticamente correcto sería:  
+`operate('-', 7, operate('/', 4, 2))` = `operate('-', 7, 2)` = **5**
+
+---
+
+## 3. Orden de evaluación de las acciones semánticas
+
+En una SDD con atributos **sintetizados** (como la de esta práctica), las acciones semánticas se evalúan en **orden post-orden** del árbol de derivación: primero los nodos hoja, luego los nodos interiores, de abajo hacia arriba.
+
+### 3.1 Para `4.0 - 2.0 * 3.0`
+
+El orden es:
+
+1. `T → number(4.0)` → `T.value = convert("4.0") = 4.0`
+2. `E → T` → `E.value = 4.0`
+3. `T → number(2.0)` → `T.value = convert("2.0") = 2.0`
+4. `E → E op T` con op=`-` → `E.value = operate('-', 4.0, 2.0) = 2.0`
+5. `T → number(3.0)` → `T.value = convert("3.0") = 3.0`
+6. `E → E op T` con op=`*` → `E.value = operate('*', 2.0, 3.0) = 6.0`
+7. `L → E eof` → `L.value = 6.0`
+
+**Resultado:** 6.0 (incorrecto matemáticamente; debería ser -2.0)
+
+### 3.2 Para `2 ** 3 ** 2`
+
+1. `T → number(2)` → `T.value = 2`
+2. `E → T` → `E.value = 2`
+3. `T → number(3)` → `T.value = 3`
+4. `E → E op T` con op=`**` → `E.value = operate('**', 2, 3) = 8`
+5. `T → number(2)` → `T.value = 2`
+6. `E → E op T` con op=`**` → `E.value = operate('**', 8, 2) = 64`
+7. `L → E eof` → `L.value = 64`
+
+**Resultado:** 64 (incorrecto; debería ser 512 con asociatividad derecha)
+
+### 3.3 Para `7 - 4 / 2`
+
+1. `T → number(7)` → `T.value = 7`
+2. `E → T` → `E.value = 7`
+3. `T → number(4)` → `T.value = 4`
+4. `E → E op T` con op=`-` → `E.value = operate('-', 7, 4) = 3`
+5. `T → number(2)` → `T.value = 2`
+6. `E → E op T` con op=`/` → `E.value = operate('/', 3, 2) = 1.5`
+7. `L → E eof` → `L.value = 1.5`
+
+**Resultado:** 1.5 (incorrecto; debería ser 5)
+
+---
+
+## 4. Por qué los resultados no coinciden con los convenios matemáticos
+
+La gramática original tiene **dos problemas estructurales**:
+
+### Problema 1: Ausencia de precedencia
+
+La gramática original tiene un único nivel de expresión (`E`) con un único token `op` para todos los operadores. Al no haber distinción gramatical entre `+`, `-`, `*`, `/` y `**`, todos tienen la **misma precedencia**. El orden en que se aplican los operadores viene determinado únicamente por la estructura del árbol (de izquierda a derecha), sin respetar que `*` debe ejecutarse antes que `+`, o que `**` debe ejecutarse antes que `*`.
+
+### Problema 2: Asociatividad incorrecta para `**`
+
+La producción `E → E op T` es **recursiva por la izquierda**, lo que codifica asociatividad izquierda para todos los operadores. Matemáticamente, la potenciación es asociativa por la derecha: `a ** b ** c` debe interpretarse como `a ** (b ** c)`. Con la gramática original se evalúa como `(a ** b) ** c`, que produce resultados distintos (e.g., `2 ** 3 ** 2` da 64 en lugar de 512).
+
+### Solución
+
+Introducir tres niveles gramaticales distintos, uno por nivel de precedencia:
+
+| Nivel | Operadores | Asociatividad | No terminal |
+|-------|-----------|---------------|-------------|
+| Bajo  | `+` `-`   | Izquierda     | `E`         |
+| Medio | `*` `/`   | Izquierda     | `T`         |
+| Alto  | `**`      | **Derecha**   | `R`         |
