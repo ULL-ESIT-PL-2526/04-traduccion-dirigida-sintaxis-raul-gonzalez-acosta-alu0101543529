@@ -7,6 +7,8 @@
 "**"                                       { return 'OPOW';    }
 [+\-]                                      { return 'OPAD';    }
 [*/]                                       { return 'OPMU';    }
+"("                                        { return '(';       }
+")"                                        { return ')';       }
 <<EOF>>                                    { return 'EOF';     }
 .                                          { return 'INVALID'; }
 /lex
@@ -48,11 +50,13 @@ power
         { $$ = $factor; }
     ;
 
-/* F → number
-   Producción base: número */
+/* F → number  |  ( E )
+   Producción base: número o expresión entre paréntesis */
 factor
     : NUMBER
         { $$ = convert(yytext); }
+    | '(' expression ')'
+        { $$ = $expression; }
     ;
 %%
 /* ---------- Funciones auxiliares ---------- */
