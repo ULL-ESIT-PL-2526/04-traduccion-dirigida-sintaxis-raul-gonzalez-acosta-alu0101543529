@@ -831,3 +831,158 @@ Introducir tres niveles gramaticales distintos, uno por nivel de precedencia:
 | Bajo  | `+` `-`   | Izquierda     | `E`         |
 | Medio | `*` `/`   | Izquierda     | `T`         |
 | Alto  | `**`      | **Derecha**   | `R`         |
+
+---
+
+## 5. Modificación de la gramática: precedencia y asociatividad
+
+### SDD modificada
+
+| Producción | Regla semántica |
+|---|---|
+| `L → E eof` | `L.value = E.value` |
+| `E → E₁ opad T` | `E.value = operate(opad.lexvalue, E₁.value, T.value)` |
+| `E → T` | `E.value = T.value` |
+| `T → T₁ opmu R` | `T.value = operate(opmu.lexvalue, T₁.value, R.value)` |
+| `T → R` | `T.value = R.value` |
+| `R → F opow R₁` | `R.value = operate(opow.lexvalue, F.value, R₁.value)` |
+| `R → F` | `R.value = F.value` |
+| `F → number` | `F.value = convert(number.lexvalue)` |
+
+### Tokens diferenciados
+
+```
+opad  →  +  |  -
+opmu  →  *  |  /
+opow  →  **
+```
+
+### Cómo se codifica cada propiedad
+
+**Precedencia** mediante jerarquía de no terminales: `E` llama a `T`, que llama a `R`, que llama a `F`. Los operadores de mayor precedencia están en los niveles más profundos del árbol, por lo que se evalúan antes.
+
+**Asociatividad izquierda** para `+`, `-`, `*`, `/` mediante **recursión izquierda** en las producciones `E → E opad T` y `T → T opmu R`. En el parser descendente recursivo se implementa con un bucle `while`.
+
+**Asociatividad derecha** para `**` mediante **recursión derecha** en `R → F opow R`. En el parser descendente recursivo se implementa con una llamada recursiva al propio `parsePower()` para el exponente.
+
+### Verificación con los ejemplos originales
+
+| Expresión | Gramática original | Gramática modificada | Resultado correcto |
+|---|---|---|---|
+| `4.0 - 2.0 * 3.0` | `(4.0 - 2.0) * 3.0 = 6.0` | `4.0 - (2.0 * 3.0) = -2.0` | **-2.0** ✓ |
+| `2 ** 3 ** 2` | `(2 ** 3) ** 2 = 64` | `2 ** (3 ** 2) = 512` | **512** ✓ |
+| `7 - 4 / 2` | `(7 - 4) / 2 = 1.5` | `7 - (4 / 2) = 5` | **5** ✓ |
+
+---
+
+## 6. Soporte de paréntesis
+
+Se añade la producción en el nivel de mayor precedencia (`F`), de modo que una expresión entre paréntesis puede aparecer en cualquier lugar donde se espera un número:
+
+| Producción | Regla semántica |
+|---|---|
+| `F → ( E )` | `F.value = E.value` |
+
+Se añaden dos nuevos tokens al léxico: `(` y `)`.
+
+Al colocar la producción en `F` (el nivel más bajo en el árbol, es decir, el de mayor precedencia), los paréntesis tienen la máxima prioridad: su contenido se evalúa completamente antes de participar en cualquier otra operación.
+
+### Ejemplos
+
+| Expresión | Sin paréntesis | Con paréntesis | Resultado |
+|---|---|---|---|
+| `(2 + 3) * 4` | `2 + (3*4) = 14` | `(2+3) * 4 = 20` | **20** ✓ |
+| `(2 ** 3) ** 2` | `2 ** (3**2) = 512` | `(2**3) ** 2 = 64` | **64** ✓ |
+| `10 / (5 - 3)` | `(10/5) - 3 = -1` | `10 / (5-3) = 5` | **5** ✓ |
+
+---
+
+## 7. Estructura del proyecto
+
+```
+.
+├── package.json               # Configuración del proyecto
+├── README.md                  # Esta documentación
+├── src
+│   ├── grammar.jison          # SDD modificada (precedencia + paréntesis)
+│   ├── parser.js              # Parser generado por Jison (o manual equivalente)
+│   └── index.js               # Punto de entrada CLI
+└── __tests__
+    ├── parser.test.js         # Tests originales de la PL#4
+    ├── prec.test.js           # Tests de precedencia — ejercicio 1.4
+    ├── prec_float.test.js     # Tests de precedencia con flotantes — ejercicio 3
+    └── paren.test.js          # Tests de paréntesis — ejercicio 5
+```
+
+### Cambios respecto a la PL#4
+
+| Fichero | Cambio |
+|---|---|
+| `src/grammar.jison` | Tres niveles de precedencia (`E`, `T`, `R`, `F`); tokens `OPAD`, `OPMU`, `OPOW`; regla `F → '(' E ')'` |
+| `__tests__/prec.test.js` | Nuevo — tests de precedencia (fallan con la gramática original) |
+| `__tests__/prec_float.test.js` | Nuevo — tests de precedencia y asociatividad con flotantes |
+| `__tests__/paren.test.js` | Nuevo — tests de expresiones entre paréntesis |
+
+---
+
+## 8. Ejecución de tests
+
+### Instalar dependencias
+
+```bash
+npm install
+```
+
+### Generar el parser con Jison
+
+```bash
+npm run build
+# equivale a: jison src/grammar.jison -o src/parser.js
+```
+
+### Ejecutar todos los tests
+
+```bash
+npm test
+```
+
+### Ejecutar suites de tests individuales
+
+```bash
+# Tests de precedencia (ejercicio 1.4)
+npx jest __tests__/prec.test.js
+
+# Tests de flotantes con precedencia (ejercicio 3)
+npx jest __tests__/prec_float.test.js
+
+# Tests de paréntesis (ejercicio 5)
+npx jest __tests__/paren.test.js
+```
+
+### Usar la calculadora desde la línea de comandos
+
+```bash
+# Precedencia correcta
+node src/index.js "2 + 3 * 4"       # => 14
+node src/index.js "2 ** 3 ** 2"     # => 512  (asociatividad derecha)
+node src/index.js "7 - 4 / 2"       # => 5
+
+# Con paréntesis
+node src/index.js "(2 + 3) * 4"     # => 20
+node src/index.js "(2 ** 3) ** 2"   # => 64   (fuerza asociatividad izquierda)
+
+# Con flotantes
+node src/index.js "1.5 + 2.0 * 3.0" # => 7.5
+node src/index.js "2.35e-3 + 1"      # => 1.00235
+
+# Con comentarios
+node src/index.js "3 + 4 // suma"    # => 7
+```
+
+---
+
+## Referencias
+
+- Aho, Lam, Sethi, Ullman — *Compilers: Principles, Techniques, and Tools* (Dragon Book), 2ª ed.
+- [Jison documentation](http://jison.org/)
+- [Jest documentation](https://jestjs.io/)
