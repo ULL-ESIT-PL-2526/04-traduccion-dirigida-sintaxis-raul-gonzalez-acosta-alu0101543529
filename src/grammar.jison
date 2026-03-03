@@ -14,8 +14,12 @@
 /lex
 
 /* ---------- Parser ---------- */
+// Precedencia (de menor a mayor)
+%left  OPAD
+%left  OPMU
+%right OPOW
 %start expressions
-%token NUMBER
+
 %%
 /* L → E eof */
 expressions
